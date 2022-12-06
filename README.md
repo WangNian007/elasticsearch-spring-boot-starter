@@ -1,0 +1,2 @@
+# elasticsearch-spring-boot-starter
+Elasticsearch RestHighLevelClient客户端通用查询实现
