@@ -4,6 +4,7 @@ package com.wang.es.starter.service;
 import com.wang.es.starter.exception.EsOperationException;
 import com.wang.es.starter.model.Page;
 import com.wang.es.starter.model.PageParam;
+import org.elasticsearch.script.Script;
 
 import java.util.List;
 
@@ -46,12 +47,7 @@ public interface IEsService<T> {
     /**
      * 查询并更新
      */
-    boolean updateByQuery(T model, String... indices);
-
-    /**
-     * 查询并更新
-     */
-    boolean updateByQuery(T model, Boolean ifRefreshImmediate, String... indices);
+    boolean updateByQuery(T model, Script script, String... indices) throws EsOperationException;
 
     /**
      * 删除对象

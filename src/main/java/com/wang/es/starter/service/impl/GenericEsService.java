@@ -13,14 +13,19 @@ import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.reindex.BulkByScrollResponse;
+import org.elasticsearch.index.reindex.UpdateByQueryRequest;
 import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.script.Script;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.slf4j.Logger;
@@ -148,13 +153,28 @@ public abstract class GenericEsService<T> implements IEsService<T> {
     }
 
     @Override
-    public boolean updateByQuery(T model, String... indices) {
-        return false;
-    }
-
-    @Override
-    public boolean updateByQuery(T model, Boolean ifRefreshImmediate, String... indices) {
-        return false;
+    public boolean updateByQuery(T model, Script script, String... indices) throws EsOperationException {
+        RestHighLevelClient client = null;
+        try {
+            UpdateByQueryRequest request =
+                    new UpdateByQueryRequest(indices);
+            request.setConflicts("proceed");
+            QueryBuilder query = this.getQuery(model, OperationType.LIST);
+            if (query != null)
+                request.setQuery(query);
+            request.setScript(script);
+            request.setScroll(TimeValue.timeValueMinutes(10));
+            request.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+            client = pool.borrowObject();
+            final BulkByScrollResponse bulkByScrollResponse = client.updateByQuery(request, RequestOptions.DEFAULT);
+            if (bulkByScrollResponse.getUpdated() <= 0) {
+                return false;
+            }
+        } catch (Exception e) {
+            logger.error("error save", e);
+            throw new EsOperationException(ResultCode.ERROR_UPDATE);
+        }
+        return true;
     }
 
     @Override
