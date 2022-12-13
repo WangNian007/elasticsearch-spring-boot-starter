@@ -10,6 +10,7 @@ import com.wang.es.starter.pool.RestHighLevelClientPool;
 import com.wang.es.starter.service.IEsService;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.collections.MapUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.lucene.search.Query;
 import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -19,6 +20,7 @@ import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
+import org.elasticsearch.action.search.SearchScrollRequest;
 import org.elasticsearch.action.support.IndicesOptions;
 import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.action.update.UpdateRequest;
@@ -309,8 +311,61 @@ public abstract class GenericEsService<T, ID> implements IEsService<T, ID> {
     }
 
     @Override
-    public Page<T> pageScroll(PageParam pageParam, T model, String... indices) {
-        return null;
+    public Page<T> pageScroll(PageParam pageParam, T model, String... indices) throws EsOperationException {
+        RestHighLevelClient client = null;
+        try {
+            SearchRequest searchRequest = new SearchRequest(indices);
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+            QueryBuilder query = this.getQuery(model, OperationType.LIST);
+            if (null != query) {
+                searchSourceBuilder.query(query);
+            }
+            List<SortBuilder<FieldSortBuilder>> sortBuilderList = this.getSort(model, OperationType.LIST);
+            if (CollectionUtils.isNotEmpty(sortBuilderList)) {
+                for (SortBuilder<FieldSortBuilder> sortBuilder : sortBuilderList) {
+                    searchSourceBuilder.sort(sortBuilder);
+                }
+            }
+            searchSourceBuilder.fetchSource(pageParam.getIncludeFields(), pageParam.getExcludeFields());//设置返回字段和排除字段
+            searchRequest.source(searchSourceBuilder);
+
+            Page<T> page = this.buildPage(searchRequest, pageParam, indices);
+            SearchResponse searchResponse;
+            client = pool.borrowObject();
+            if (StringUtils.isNotEmpty(pageParam.getScrollId())) {
+                searchRequest.scroll(new TimeValue(600 * 1000L));
+                if (page.getPageNo() == page.getTotalPage()) {
+                    searchSourceBuilder.size(page.getTotalCount() - page.getPrevPage() * page.getPageSize());
+                } else {
+                    searchSourceBuilder.size(page.getPageSize());
+                }
+                searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+
+            } else {
+                SearchScrollRequest scrollRequest = new SearchScrollRequest(pageParam.getScrollId());
+                scrollRequest.scroll(new TimeValue(600 * 1000L));
+                searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT);
+            }
+            SearchHit[] searchHits = searchResponse.getHits().getHits();
+            String scrollId = searchResponse.getScrollId();
+            page.setScrollId(scrollId);
+
+            for (SearchHit searchHit : searchHits) {
+                Map<String, Object> map = searchHit.getSourceAsMap();
+                if (null != map) {
+                    map.put("esIndex", searchHit.getIndex());
+                    map.put("esId", searchHit.getId());
+                }
+                page.getResults().add((T) JSON.parseObject(searchHit.getSourceAsString(), model.getClass()));
+            }
+            return page;
+        } catch (Exception e) {
+            logger.error("search error", e);
+            throw new EsOperationException(ResultCode.ERROR_SEARCH, e);
+        } finally {
+            if (client != null)
+                pool.returnObject(client);
+        }
     }
 
     public Page<T> buildPage(SearchRequest searchRequest, PageParam pageParam, String... indices) throws EsOperationException {

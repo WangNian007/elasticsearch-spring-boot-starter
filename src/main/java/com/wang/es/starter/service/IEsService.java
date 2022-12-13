@@ -81,5 +81,5 @@ public interface IEsService<T, ID> {
     /**
      * Scroll 查询分页方法
      */
-    Page<T> pageScroll(PageParam pageParam, T model, String... indices);
+    Page<T> pageScroll(PageParam pageParam, T model, String... indices) throws EsOperationException;
 }
