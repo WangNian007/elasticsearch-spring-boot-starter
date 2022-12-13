@@ -285,7 +285,7 @@ public abstract class GenericEsService<T, ID> implements IEsService<T, ID> {
                 }
             }
             request.source(searchSourceBuilder);
-            pageResult = this.buildPage(request, pageParam, indices);
+            pageResult = this.buildPage(request, pageParam);
             client = pool.borrowObject();
             final SearchResponse searchResponse = client.search(request, RequestOptions.DEFAULT);
             SearchHit[] searchHits = searchResponse.getHits().getHits();
@@ -329,7 +329,7 @@ public abstract class GenericEsService<T, ID> implements IEsService<T, ID> {
             searchSourceBuilder.fetchSource(pageParam.getIncludeFields(), pageParam.getExcludeFields());//设置返回字段和排除字段
             searchRequest.source(searchSourceBuilder);
 
-            Page<T> page = this.buildPage(searchRequest, pageParam, indices);
+            Page<T> page = this.buildPage(searchRequest, pageParam);
             SearchResponse searchResponse;
             client = pool.borrowObject();
             if (StringUtils.isNotEmpty(pageParam.getScrollId())) {
@@ -368,7 +368,7 @@ public abstract class GenericEsService<T, ID> implements IEsService<T, ID> {
         }
     }
 
-    public Page<T> buildPage(SearchRequest searchRequest, PageParam pageParam, String... indices) throws EsOperationException {
+    public Page<T> buildPage(SearchRequest searchRequest, PageParam pageParam) throws EsOperationException {
 
         SearchResponse response = null;
         RestHighLevelClient client = null;
