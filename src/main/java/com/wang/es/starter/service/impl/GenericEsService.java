@@ -11,11 +11,18 @@ import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.search.SearchRequest;
+import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.action.support.WriteRequest;
+import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.search.SearchHit;
+import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,11 +42,11 @@ public abstract class GenericEsService<T> implements IEsService<T> {
 
     @Override
     public T insert(T model, String index) throws EsOperationException {
-        return this.insert(model, index, Boolean.FALSE);
+        return this.insert(model, Boolean.FALSE, index);
     }
 
     @Override
-    public T insert(T model, String index, Boolean ifRefreshImmediate) throws EsOperationException {
+    public T insert(T model, Boolean ifRefreshImmediate, String index) throws EsOperationException {
         RestHighLevelClient restClient = null;
         try {
             BulkRequest request = new BulkRequest();
@@ -67,11 +74,11 @@ public abstract class GenericEsService<T> implements IEsService<T> {
 
     @Override
     public List<T> inserts(List<T> models, String index) throws EsOperationException {
-        return this.inserts(models, index, Boolean.FALSE);
+        return this.inserts(models, Boolean.FALSE, index);
     }
 
     @Override
-    public List<T> inserts(List<T> models, String index, Boolean ifRefreshImmediate) throws EsOperationException {
+    public List<T> inserts(List<T> models, Boolean ifRefreshImmediate, String index) throws EsOperationException {
         RestHighLevelClient client = null;
         try {
             BulkRequest request = new BulkRequest();
@@ -100,12 +107,53 @@ public abstract class GenericEsService<T> implements IEsService<T> {
     }
 
     @Override
-    public boolean update(T model, String index) {
+    public boolean update(T model, String... indices) throws EsOperationException {
+        return this.update(model, Boolean.FALSE, indices);
+    }
+
+    @Override
+    public boolean update(T model, Boolean ifRefreshImmediate, String... indices) throws EsOperationException {
+        RestHighLevelClient client = null;
+        try {
+            SearchRequest request = new SearchRequest(indices);
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+            QueryBuilder query = this.getQuery(model, OperationType.LIST);
+            if (query != null)
+                searchSourceBuilder.query(query);
+            searchSourceBuilder.size(1);
+            request.source(searchSourceBuilder);
+            client = pool.borrowObject();
+            SearchResponse searchResponse = client.search(request, RequestOptions.DEFAULT);
+            if (searchResponse.getHits().getTotalHits().value == 1) {
+                SearchHit hit = searchResponse.getHits().getAt(0);
+                UpdateRequest updateRequest = new UpdateRequest(hit.getIndex(), hit.getId());
+                updateRequest.doc(JSONObject.toJSONString(model), XContentType.JSON);
+                if (ifRefreshImmediate) {
+                    updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                }
+                UpdateResponse updateResponse = client.update(updateRequest, RequestOptions.DEFAULT);
+                if (updateResponse.status() != RestStatus.OK) {
+                    throw new EsOperationException(ResultCode.ERROR_UPDATE);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("error save", e);
+            throw new EsOperationException(ResultCode.ERROR_UPDATE);
+        } finally {
+            if (client != null)
+                pool.returnObject(client);
+        }
+
         return false;
     }
 
     @Override
-    public boolean update(T model, String index, Boolean ifRefreshImmediate) {
+    public boolean updateByQuery(T model, String... indices) {
+        return false;
+    }
+
+    @Override
+    public boolean updateByQuery(T model, Boolean ifRefreshImmediate, String... indices) {
         return false;
     }
 
@@ -120,17 +168,17 @@ public abstract class GenericEsService<T> implements IEsService<T> {
     }
 
     @Override
-    public T get(T model, String... index) {
+    public T get(T model, String... indices) {
         return null;
     }
 
     @Override
-    public Page<T> page(PageParam page, T model, String... index) {
+    public Page<T> page(PageParam page, T model, String... indices) {
         return null;
     }
 
     @Override
-    public Page<T> pageScroll(PageParam pageParam, T model, String... index) {
+    public Page<T> pageScroll(PageParam pageParam, T model, String... indices) {
         return null;
     }
 

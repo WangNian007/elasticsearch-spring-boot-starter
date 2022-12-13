@@ -20,7 +20,7 @@ public interface IEsService<T> {
     /**
      * 插入对象,ifRefreshImmediate 为true 则立即刷新
      */
-    T insert(T model, String index, Boolean ifRefreshImmediate) throws EsOperationException;
+    T insert(T model, Boolean ifRefreshImmediate, String index) throws EsOperationException;
 
 
     /**
@@ -31,17 +31,27 @@ public interface IEsService<T> {
     /**
      * 批量插入 复用insert， ifRefreshImmediate 为true 则立即刷新
      */
-    List<T> inserts(List<T> models, String index, Boolean ifRefreshImmediate) throws EsOperationException;
+    List<T> inserts(List<T> models, Boolean ifRefreshImmediate, String index) throws EsOperationException;
 
     /**
      * 更新对象
      */
-    boolean update(T model, String index);
+    boolean update(T model, String... indices) throws EsOperationException;
 
     /**
      * 更新对象
      */
-    boolean update(T model, String index, Boolean ifRefreshImmediate);
+    boolean update(T model, Boolean ifRefreshImmediate, String... indices) throws EsOperationException;
+
+    /**
+     * 查询并更新
+     */
+    boolean updateByQuery(T model, String... indices);
+
+    /**
+     * 查询并更新
+     */
+    boolean updateByQuery(T model, Boolean ifRefreshImmediate, String... indices);
 
     /**
      * 删除对象
@@ -60,15 +70,15 @@ public interface IEsService<T> {
     /**
      * 查询单个对象
      */
-    T get(T model, String... index);
+    T get(T model, String... indices);
 
     /**
      * 查询分页方法
      */
-    Page<T> page(PageParam page, T model, String... index);
+    Page<T> page(PageParam page, T model, String... indices);
 
     /**
      * Scroll 查询分页方法
      */
-    Page<T> pageScroll(PageParam pageParam, T model, String... index);
+    Page<T> pageScroll(PageParam pageParam, T model, String... indices);
 }
