@@ -7,6 +7,7 @@ import com.wang.es.starter.model.Page;
 import com.wang.es.starter.model.PageParam;
 import com.wang.es.starter.pool.RestHighLevelClientPool;
 import com.wang.es.starter.service.IEsService;
+import org.apache.lucene.search.Query;
 import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
@@ -23,6 +24,7 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.reindex.BulkByScrollResponse;
+import org.elasticsearch.index.reindex.DeleteByQueryRequest;
 import org.elasticsearch.index.reindex.UpdateByQueryRequest;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.script.Script;
@@ -178,13 +180,37 @@ public abstract class GenericEsService<T> implements IEsService<T> {
     }
 
     @Override
-    public boolean delete(T model, String index) {
-        return false;
+    public boolean deleteByQuery(T model, String... indices) throws EsOperationException {
+        RestHighLevelClient client;
+        try {
+            DeleteByQueryRequest request =
+                    new DeleteByQueryRequest(indices);
+            request.setConflicts("proceed");
+            QueryBuilder query = this.getQuery(model, OperationType.LIST);
+            if (query != null)
+                request.setQuery(query);
+            request.setScroll(TimeValue.timeValueMinutes(10));
+            request.setRefresh(true);
+            request.setIndicesOptions(IndicesOptions.LENIENT_EXPAND_OPEN);
+            client = pool.borrowObject();
+            BulkByScrollResponse bulkByScrollResponse = client.deleteByQuery(request, RequestOptions.DEFAULT);
+            if (bulkByScrollResponse.getBulkFailures().size() > 0) {
+                logger.error("error delete:{}", JSONObject.toJSONString(bulkByScrollResponse.getBulkFailures()));
+                throw new EsOperationException(ResultCode.ERROR_DELETE);
+            }
+        } catch (Exception e) {
+            logger.error("error save", e);
+            throw new EsOperationException(ResultCode.ERROR_UPDATE);
+        }
+        return true;
     }
 
     @Override
-    public boolean deletes(List<T> model, String index) {
-        return false;
+    public boolean deletesByQuery(List<T> models, String... indices) throws EsOperationException {
+        for (T model : models) {
+            this.deleteByQuery(model, indices);
+        }
+        return true;
     }
 
     @Override

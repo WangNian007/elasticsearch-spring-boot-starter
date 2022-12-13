@@ -53,7 +53,7 @@ public interface IEsService<T> {
      * 删除对象
      * 主键使用primaries会按,逗号分割主键以批量更新
      */
-    boolean delete(T model, String index);
+    boolean deleteByQuery(T model, String... indices) throws EsOperationException;
 
     /**
      * 批量删除
@@ -61,7 +61,7 @@ public interface IEsService<T> {
      * 若仅根据主键按逗号分割 更新数据相同delete方法即可支持
      * 用次方法目的仅在于复用delete方法更新数据体不同时
      */
-    boolean deletes(List<T> model, String index);
+    boolean deletesByQuery(List<T> models, String... indices) throws EsOperationException;
 
     /**
      * 查询单个对象
