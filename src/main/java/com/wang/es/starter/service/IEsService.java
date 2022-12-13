@@ -76,7 +76,7 @@ public interface IEsService<T, ID> {
     /**
      * 查询分页方法
      */
-    Page<T> page(PageParam page, T model, String... indices);
+    Page<T> page(PageParam page, T model, String... indices) throws EsOperationException;
 
     /**
      * Scroll 查询分页方法

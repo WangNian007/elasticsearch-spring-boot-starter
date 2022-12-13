@@ -8,6 +8,8 @@ import com.wang.es.starter.model.Page;
 import com.wang.es.starter.model.PageParam;
 import com.wang.es.starter.pool.RestHighLevelClientPool;
 import com.wang.es.starter.service.IEsService;
+import org.apache.commons.collections.CollectionUtils;
+import org.apache.commons.collections.MapUtils;
 import org.apache.lucene.search.Query;
 import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
@@ -26,6 +28,7 @@ import org.elasticsearch.client.RestHighLevelClient;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.index.IndexNotFoundException;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.reindex.BulkByScrollResponse;
 import org.elasticsearch.index.reindex.DeleteByQueryRequest;
@@ -35,6 +38,8 @@ import org.elasticsearch.script.Script;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
+import org.elasticsearch.search.sort.FieldSortBuilder;
+import org.elasticsearch.search.sort.SortBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +47,7 @@ import org.springframework.core.convert.ConversionService;
 import org.springframework.util.Assert;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -55,6 +61,8 @@ public abstract class GenericEsService<T, ID> implements IEsService<T, ID> {
     private RestHighLevelClientPool pool;
 
     public abstract QueryBuilder getQuery(T model, OperationType operationType);
+
+    public abstract List<SortBuilder<FieldSortBuilder>> getSort(T model, OperationType operationType);
 
     @Override
     public T insert(T model, String index) throws EsOperationException {
@@ -258,13 +266,93 @@ public abstract class GenericEsService<T, ID> implements IEsService<T, ID> {
     }
 
     @Override
-    public Page<T> page(PageParam page, T model, String... indices) {
-        return null;
+    public Page<T> page(PageParam pageParam, T model, String... indices) throws EsOperationException {
+        RestHighLevelClient client = null;
+        Page<T> pageResult = null;
+        try {
+            SearchRequest request = new SearchRequest(indices);
+            final QueryBuilder query = this.getQuery(model, OperationType.LIST);
+            final List<SortBuilder<FieldSortBuilder>> sortBuilderList = this.getSort(model, OperationType.LIST);
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+            if (query != null)
+                searchSourceBuilder.query(query);
+            searchSourceBuilder.fetchSource(pageParam.getIncludeFields(), pageParam.getExcludeFields());
+            if (CollectionUtils.isNotEmpty(sortBuilderList)) {
+                for (SortBuilder<FieldSortBuilder> sortBuilder : sortBuilderList) {
+                    searchSourceBuilder.sort(sortBuilder);
+                }
+            }
+            request.source(searchSourceBuilder);
+            pageResult = this.buildPage(request, pageParam, indices);
+            client = pool.borrowObject();
+            final SearchResponse searchResponse = client.search(request, RequestOptions.DEFAULT);
+            SearchHit[] searchHits = searchResponse.getHits().getHits();
+            if (searchHits.length == 0) {
+                return pageResult;
+            }
+            for (SearchHit searchHit : searchHits) {
+                Map<String, Object> map = searchHit.getSourceAsMap();
+                if (MapUtils.isNotEmpty(map)) {
+                    map.put("esId", searchHit.getId());
+                    map.put("esIndex", searchHit.getIndex());
+                }
+                pageResult.getResults().add((T) JSON.parseObject(JSON.toJSONString(map), model.getClass()));
+            }
+        } catch (Exception e) {
+            logger.error("error save", e);
+            throw new EsOperationException(ResultCode.ERROR_SEARCH);
+        } finally {
+            if (client != null)
+                pool.returnObject(client);
+        }
+        return pageResult;
     }
 
     @Override
     public Page<T> pageScroll(PageParam pageParam, T model, String... indices) {
         return null;
+    }
+
+    public Page<T> buildPage(SearchRequest searchRequest, PageParam pageParam, String... indices) throws EsOperationException {
+
+        SearchResponse response = null;
+        RestHighLevelClient client = null;
+        try {
+            searchRequest.source().size(0);
+            client = pool.borrowObject();
+            response = client.search(searchRequest, RequestOptions.DEFAULT);
+        } catch (Exception e) {
+            logger.error("error save", e);
+            throw new EsOperationException(ResultCode.ERROR_SEARCH);
+        } finally {
+            if (client != null)
+                pool.returnObject(client);
+        }
+        int totalHits = (int) response.getHits().getTotalHits().value;
+        Page<T> page = new Page<>();
+        if (totalHits > 0) {
+            page.setTotalPage(totalHits % pageParam.getPageSize() == 0 ? totalHits / pageParam.getPageSize() : totalHits / pageParam.getPageSize() + 1);
+        }
+        page.setTotalCount(totalHits);
+        page.setPageNo(pageParam.getPageNo());
+        page.setPageSize(pageParam.getPageSize());
+
+        if (pageParam.getPageSize() == 0) {
+            page.setPageNo(1);
+            page.setPageSize(totalHits);
+            page.setTotalPage(1);
+            page.setTotalCount(totalHits);
+        }
+        page.setResults(new ArrayList<>(totalHits));
+        page.setFirstPage(page.getPageNo() == 1);
+        page.setLastPage(page.getPageNo() == page.getTotalPage());
+        page.setStartRow((page.getPageNo() - 1) * page.getPageSize());
+        page.setEndRow(page.getPageNo() * page.getPageSize());
+        page.setHasPrevPage(page.getPageNo() - 1 > 0);
+        page.setPrevPage(page.getPageNo() - 1);
+        page.setHasNextPage(page.getPageNo() + 1 <= page.getTotalPage());
+        page.setNextPage(page.getPageNo() + 1);
+        return page;
     }
 
     private String convertId(Object idValue) {
