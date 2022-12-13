@@ -12,7 +12,7 @@ import java.util.List;
  * @author 王念
  * @create 2022-12-13 9:39
  */
-public interface IEsService<T> {
+public interface IEsService<T, ID> {
     /**
      * 插入对象
      */
@@ -66,7 +66,12 @@ public interface IEsService<T> {
     /**
      * 查询单个对象
      */
-    T get(T model, String... indices);
+    T get(ID id, String index) throws EsOperationException;
+
+    /**
+     * 查询单个对象
+     */
+    T get(ID id, String index, String[] includes, String[] excludes) throws EsOperationException;
 
     /**
      * 查询分页方法

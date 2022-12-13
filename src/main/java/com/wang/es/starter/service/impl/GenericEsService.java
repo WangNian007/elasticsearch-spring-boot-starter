@@ -1,5 +1,6 @@
 package com.wang.es.starter.service.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.wang.es.starter.code.ResultCode;
 import com.wang.es.starter.exception.EsOperationException;
@@ -11,6 +12,8 @@ import org.apache.lucene.search.Query;
 import org.elasticsearch.action.DocWriteRequest;
 import org.elasticsearch.action.bulk.BulkRequest;
 import org.elasticsearch.action.bulk.BulkResponse;
+import org.elasticsearch.action.get.GetRequest;
+import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
@@ -20,6 +23,7 @@ import org.elasticsearch.action.update.UpdateRequest;
 import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.RequestOptions;
 import org.elasticsearch.client.RestHighLevelClient;
+import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.index.query.QueryBuilder;
@@ -30,17 +34,22 @@ import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.script.Script;
 import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.fetch.subphase.FetchSourceContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.convert.ConversionService;
+import org.springframework.util.Assert;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 /**
  * @author 王念
  * @create 2022-12-13 10:01
  */
-public abstract class GenericEsService<T> implements IEsService<T> {
+public abstract class GenericEsService<T, ID> implements IEsService<T, ID> {
     private static final Logger logger = LoggerFactory.getLogger(GenericEsService.class);
     @Autowired
     private RestHighLevelClientPool pool;
@@ -214,8 +223,38 @@ public abstract class GenericEsService<T> implements IEsService<T> {
     }
 
     @Override
-    public T get(T model, String... indices) {
-        return null;
+    public T get(ID id, String index, String[] includes, String[] excludes) throws EsOperationException {
+        Assert.notNull(id, "id must be not null");
+        RestHighLevelClient client = null;
+        try {
+            GetRequest getRequest = new GetRequest(
+                    index,
+                    convertId(id));
+            FetchSourceContext fetchSourceContext =
+                    new FetchSourceContext(true, includes, excludes);
+            getRequest.fetchSourceContext(fetchSourceContext);
+            getRequest.refresh(true);
+            client = pool.borrowObject();
+            GetResponse getResponse = client.get(getRequest, RequestOptions.DEFAULT);
+            if (getResponse.isExists()) {
+                long version = getResponse.getVersion();
+                Map<String, Object> sourceAsMap = getResponse.getSourceAsMap();
+                sourceAsMap.put("esId", getResponse.getId());
+                sourceAsMap.put("version", version);
+                return (T) JSONObject.parseObject(JSON.toJSONString(sourceAsMap));
+            } else {
+                return null;
+            }
+        } catch (Exception e) {
+            logger.error("error save", e);
+            throw new EsOperationException(ResultCode.ERROR_SEARCH);
+        }
+    }
+
+
+    @Override
+    public T get(ID id, String index) throws EsOperationException {
+        return this.get(id, index, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
     }
 
     @Override
@@ -226,6 +265,16 @@ public abstract class GenericEsService<T> implements IEsService<T> {
     @Override
     public Page<T> pageScroll(PageParam pageParam, T model, String... indices) {
         return null;
+    }
+
+    private String convertId(Object idValue) {
+        if (idValue == null) {
+            return null;
+        }
+        if (idValue instanceof String) {
+            return (String) idValue;
+        }
+        return idValue.toString();
     }
 
     public enum OperationType {
