@@ -21,6 +21,7 @@
         <jakarta.version>2.0.1</jakarta.version>
         <commons.pool2.version>2.11.1</commons.pool2.version>
         <fastjson.version>1.2.83</fastjson.version>
+        <commons.version>1.0-SNAPSHOT</commons.version>
     </properties>
     <dependencies>
         <dependency>
@@ -69,6 +70,11 @@
             <groupId>com.alibaba</groupId>
             <artifactId>fastjson</artifactId>
             <version>${fastjson.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.wang</groupId>
+            <artifactId>commons</artifactId>
+            <version>${commons.version}</version>
         </dependency>
 
     </dependencies>
