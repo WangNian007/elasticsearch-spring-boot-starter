@@ -2,7 +2,17 @@
 Elasticsearch RestHighLevelClient客户端通用查询实现。
 
 ### quick start
-  1.引入jar
+  1.依赖编译
+  ```shell script
+    git clone https://github.com/WangNian007/commons.git
+    cd commons
+    mvn install
+
+    git clone https://github.com/WangNian007/elasticsearch-spring-boot-starter.git
+    cd elasticsearch-spring-boot-starter
+    mvn install
+  ```
+  2.依赖引入
   ```xml
    <dependency>
      <groupId>com.wangnian</groupId>
@@ -10,7 +20,7 @@ Elasticsearch RestHighLevelClient客户端通用查询实现。
      <version>1.0-SNAPSHOT</version>
    </dependency>
   ```
-  2.添加配置(yaml配置)
+  3.添加配置(yaml配置)
   ```yaml
     spring.es:
       username: 
@@ -19,13 +29,13 @@ Elasticsearch RestHighLevelClient客户端通用查询实现。
         - http://127.0.0.1:9200
         - http://127.0.0.2:9200
   ```
-  3.使用连接池
+  4.使用连接池
   ```yaml
     spring.es:
       pool:
         maxTotal: 10
   ```
-  4.通用查询
+  5.通用查询
   ```java
   ```
 ### 功能丰富
