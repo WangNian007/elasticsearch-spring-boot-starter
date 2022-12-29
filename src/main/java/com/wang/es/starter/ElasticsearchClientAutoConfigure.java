@@ -6,7 +6,9 @@ import com.wang.es.starter.factory.RestHighLevelClientPooledFactory;
 import com.wang.es.starter.pool.RestHighLevelClientPool;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,11 +18,12 @@ import org.springframework.context.annotation.Configuration;
  * @create 2022-12-06 18:56
  */
 @Configuration
-@ConditionalOnMissingBean({RestHighLevelClient.class, RestHighLevelClientPool.class, RestHighLevelClientPooledFactory.class})
+@ConditionalOnClass({RestHighLevelClient.class, RestHighLevelClientPool.class, RestHighLevelClientPooledFactory.class})
 public class ElasticsearchClientAutoConfigure {
 
     @Bean
     @ConfigurationProperties(prefix = ElasticsearchConfig.PREFIX)
+    @ConditionalOnProperty(prefix = ElasticsearchConfig.PREFIX, value = {"hosts"})
     @ConditionalOnMissingBean(ElasticsearchConfig.class)
     public ElasticsearchConfig elasticsearchConfig() {
         return new ElasticsearchConfig();
@@ -36,8 +39,8 @@ public class ElasticsearchClientAutoConfigure {
     @Bean
     @ConditionalOnMissingBean(RestHighLevelClientPooledFactory.class)
     public RestHighLevelClientPooledFactory restHighLevelClientPooledFactory(
-            @Autowired ElasticsearchConfig config) {
-        return new RestHighLevelClientPooledFactory(config);
+            @Autowired ElasticsearchConfig elasticsearchConfig) {
+        return new RestHighLevelClientPooledFactory(elasticsearchConfig);
     }
 
     @Bean
