@@ -7,7 +7,6 @@ import com.wang.es.starter.pool.RestHighLevelClientPool;
 import org.elasticsearch.client.RestHighLevelClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,14 +21,13 @@ public class ElasticsearchClientAutoConfigure {
 
     @Bean
     @ConfigurationProperties(prefix = ElasticsearchConfig.PREFIX)
-    @ConditionalOnProperty(prefix = ElasticsearchConfig.PREFIX, value = {"hosts"})
     @ConditionalOnMissingBean(ElasticsearchConfig.class)
     public ElasticsearchConfig elasticsearchConfig() {
         return new ElasticsearchConfig();
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = RestHighLevelClientPoolConfig.PREFIX)
+    @ConfigurationProperties(prefix = RestHighLevelClientPoolConfig.PREFIX)
     @ConditionalOnMissingBean(RestHighLevelClientPoolConfig.class)
     public RestHighLevelClientPoolConfig restHighLevelClientPoolConfig() {
         return new RestHighLevelClientPoolConfig();
@@ -47,6 +45,7 @@ public class ElasticsearchClientAutoConfigure {
     public RestHighLevelClientPool restHighLevelClientPool(
             @Autowired RestHighLevelClientPooledFactory clientFactory,
             @Autowired RestHighLevelClientPoolConfig poolConfig) {
+        poolConfig.setJmxEnabled(false);
         return new RestHighLevelClientPool(clientFactory, poolConfig);
     }
 }
