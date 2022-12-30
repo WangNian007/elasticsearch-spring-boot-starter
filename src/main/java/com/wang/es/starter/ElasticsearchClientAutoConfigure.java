@@ -23,7 +23,6 @@ public class ElasticsearchClientAutoConfigure {
 
     @Bean
     @ConfigurationProperties(prefix = ElasticsearchConfig.PREFIX)
-    @ConditionalOnProperty(prefix = ElasticsearchConfig.PREFIX, value = {"hosts"})
     @ConditionalOnMissingBean(ElasticsearchConfig.class)
     public ElasticsearchConfig elasticsearchConfig() {
         return new ElasticsearchConfig();
